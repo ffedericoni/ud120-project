@@ -1,4 +1,12 @@
 #!/usr/bin/python
+'''
+@author: Fabrizio Federiconi
+@email:  ffedericoni@gmail.com
+
+This is the final project for the ud120 course
+My comments start with #ff
+
+'''
 
 import sys
 import pickle
@@ -8,19 +16,21 @@ from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data
 import matplotlib
 
+print __doc__
 
 ### Task 1: Select what features you'll use.
 ### features_list is a list of strings, each of which is a feature name.
 ### The first feature must be "poi".
-features_list = ['poi'] # You will need to use more features
+features_list = ['poi'] 
 features_list += ['bonus', 'salary', 'deferral_payments', 'total_payments', 
 'loan_advances', 'restricted_stock_deferred',
 'deferred_income', 'total_stock_value', 'expenses', 'exercised_stock_options', 
 'other', 'long_term_incentive',
 'restricted_stock', 'director_fees']
-#features_list += ['to_messages', 'email_address', 'from_poi_to_this_person', 
-#'from_messages', 'from_this_person_to_poi',
-#'shared_receipt_with_poi']
+features_list += ['to_messages',  'from_poi_to_this_person', 
+'from_messages', 'from_this_person_to_poi',
+'shared_receipt_with_poi']
+#'email_address'
 
 
 ### Load the dictionary containing the dataset
@@ -32,7 +42,53 @@ with open("final_project_dataset.pkl", "r") as data_file:
 #ff it should be removed as outlier
 data_dict.pop('TOTAL')
 
+#ff I want to analyse the items with most NaNs
+print("=============================================")
+print("= These items have a lot of NaNs" )
+print("=============================================")
+keys = data_dict.keys()
+for key in keys:
+    countNaN=0
+    for feature in features_list:
+        value = data_dict[key][feature]
+        if value=="NaN":
+                countNaN+=1
+    if countNaN > len(features_list) * 0.75:
+        print key, countNaN, data_dict[key]['poi']
+#ff the loop above prints 12 items and visually checking them, I see one of them is a Travel Agency.
+#ff It is in the insiderpay PDF, even though not related to an employee, so I keep it.
+#ff googling I found out that the sister of the Enron CEO owns 50% of the Travel Agency, 
+#ff so the company could be part of the fraud
+#ff All these items with an abundance of NaNs have poi=False, so I keep them
+#ff because it seems the lack of information correlates with the poi feature 
+print("=============================================")
+print("= There are %d records in the Data Dictionary" % len(data_dict))
+print("= after removing the outlier")
+pois=0
+for key in keys:
+    if data_dict[key]['poi']:
+        pois+=1
+print("= Only %d records are POIs, so the dataset is quite unbalanced" % pois)
+print("=============================================")
+#ff Let's see if some features have >75% NaNs
+print("=============================================")
+print("= These are the features with > 75% NaNs")
+print("=============================================")
+for feature in features_list:
+    countNaN=0
+    for key in keys:
+        value = data_dict[key][feature]
+        if value=="NaN":
+                countNaN+=1
+    if countNaN > len(keys) * 0.75:
+        print feature, countNaN
+#ff The loan_advances, restricted_stock_deferred and director_fees have a lot of NaNs
+#ff and it makes sense because only a small percentage of people is a director and 
+#ff loan advances or deferred/restricted stocks are not commonly granted.
+#ff For this reason I keep the features because the usage of these kinds 
+#ff of payment could correlate with being a poi
 
+#ff Let's plot some graphs to check for other outliers
 data = featureFormat(data_dict, ['bonus', 'salary'], sort_keys = True)
 labels, features = targetFeatureSplit(data)
 
@@ -43,11 +99,23 @@ for point in data:
 
 matplotlib.pyplot.xlabel("salary")
 matplotlib.pyplot.ylabel("bonus")
-matplotlib.pyplot.show()
-
-
-data = featureFormat(data_dict, features_list, sort_keys = True)
+#TODO uncomment matplotlib.pyplot.show()
+#ff Ther are points with a high stddev, 
+#ff but that can be an interesting information for the model
+data = featureFormat(data_dict, ['other', 'long_term_incentive'], sort_keys = True)
 labels, features = targetFeatureSplit(data)
+
+for point in data:
+    salary = point[0]
+    bonus = point[1]
+    matplotlib.pyplot.scatter( salary, bonus )
+
+matplotlib.pyplot.xlabel("other")
+matplotlib.pyplot.ylabel("long_term_incentive")
+#TODO uncomment matplotlib.pyplot.show()
+#ff Also for the other and long_term_incentive features
+#ff There are a few points with a high stddev, 
+#ff but again that can be an interesting information for the model
 
 
 ### Task 3: Create new feature(s)
@@ -57,6 +125,26 @@ my_dataset = data_dict
 ### Extract features and labels from dataset for local testing
 data = featureFormat(my_dataset, features_list, sort_keys = True)
 labels, features = targetFeatureSplit(data)
+#ff Adding two new features, as in Lesson 12
+for name in my_dataset:
+    employee = my_dataset[name]
+    try:
+        fraction_from_poi = float(employee["from_poi_to_this_person"]) / \
+            float(employee["from_messages"])
+        employee["fraction_from_poi"] = fraction_from_poi
+        fraction_to_poi = float(employee["from_this_person_to_poi"]) / \
+            float(employee["to_messages"])
+        employee["fraction_to_poi"] = fraction_to_poi
+    except ArithmeticError:
+        employee["fraction_from_poi"] = employee["fraction_to_poi"] = 0
+
+my_features = features_list + ["fraction_from_poi", "fraction_to_poi"]
+
+#ff Extract again with the two additional features
+data = featureFormat(my_dataset, features_list, sort_keys = True)
+labels, features = targetFeatureSplit(data)
+
+
 
 ### Task 4: Try a varity of classifiers
 ### Please name your classifier clf for easy export below.
