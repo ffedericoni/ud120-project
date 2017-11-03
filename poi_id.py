@@ -128,20 +128,24 @@ labels, features = targetFeatureSplit(data)
 #ff Adding two new features, as in Lesson 12
 for name in my_dataset:
     employee = my_dataset[name]
-    try:
+    if (employee['from_poi_to_this_person'] != 'NaN' and
+                 employee['from_this_person_to_poi'] != 'NaN' and
+                 employee['to_messages'] != 'NaN' and
+                 employee['from_messages'] != 'NaN'
+                 ):
         fraction_from_poi = float(employee["from_poi_to_this_person"]) / \
             float(employee["from_messages"])
         employee["fraction_from_poi"] = fraction_from_poi
         fraction_to_poi = float(employee["from_this_person_to_poi"]) / \
             float(employee["to_messages"])
         employee["fraction_to_poi"] = fraction_to_poi
-    except ArithmeticError:
+    else:
         employee["fraction_from_poi"] = employee["fraction_to_poi"] = 0
 
 my_features = features_list + ["fraction_from_poi", "fraction_to_poi"]
 
 #ff Extract again with the two additional features
-data = featureFormat(my_dataset, features_list, sort_keys = True)
+data = featureFormat(my_dataset, my_features, sort_keys = True)
 labels, features = targetFeatureSplit(data)
 
 
@@ -154,7 +158,27 @@ labels, features = targetFeatureSplit(data)
 
 # Provided to give you a starting point. Try a variety of classifiers.
 from sklearn.naive_bayes import GaussianNB
-clf = GaussianNB()
+clfgnb = GaussianNB()
+clfgnb.fit(features, labels)
+print("Gaussian NB Score=", clfgnb.score(features, labels))
+
+# Out of the bos the precision is good but recall is very low, so I think the problem
+# is the balancing of the data, as the positives are only 18 out of 144
+# Playing with class weights improves the score, but I had to play also with random_state
+# to achieve scores higher than 0.3
+from sklearn import tree
+class_weights = {0.0: 1, 1.0: 3.5}
+#class_weights = "balanced"
+clf = tree.DecisionTreeClassifier(class_weight=class_weights, criterion='gini', max_depth=4,
+            max_features="auto", max_leaf_nodes=None, min_samples_leaf=1,
+            min_samples_split=4, min_weight_fraction_leaf=0.0,
+            presort=False, random_state=51, splitter='random')
+clf.fit(features, labels)
+print("Decision Tree Score=", clf.score(features, labels))
+
+
+import tester
+tester.test_classifier(clf, my_dataset, my_features)
 
 ### Task 5: Tune your classifier to achieve better than .3 precision and recall 
 ### using our testing script. Check the tester.py script in the final project
