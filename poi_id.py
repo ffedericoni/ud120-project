@@ -4,7 +4,7 @@
 @email:  ffedericoni@gmail.com
 
 This is the final project for the ud120 course
-My comments start with #ff
+Comments start with #ff
 
 '''
 
@@ -15,8 +15,11 @@ sys.path.append("../tools/")
 from feature_format import featureFormat, targetFeatureSplit
 from tester import dump_classifier_and_data
 import matplotlib
+from datetime import datetime
 
 print __doc__
+
+startt = datetime.now()
 
 ### Task 1: Select what features you'll use.
 ### features_list is a list of strings, each of which is a feature name.
@@ -99,8 +102,8 @@ for point in data:
 
 matplotlib.pyplot.xlabel("salary")
 matplotlib.pyplot.ylabel("bonus")
-#TODO uncomment matplotlib.pyplot.show()
-#ff Ther are points with a high stddev, 
+matplotlib.pyplot.show()
+#ff There are points with a high stddev, 
 #ff but that can be an interesting information for the model
 data = featureFormat(data_dict, ['other', 'long_term_incentive'], sort_keys = True)
 labels, features = targetFeatureSplit(data)
@@ -112,7 +115,7 @@ for point in data:
 
 matplotlib.pyplot.xlabel("other")
 matplotlib.pyplot.ylabel("long_term_incentive")
-#TODO uncomment matplotlib.pyplot.show()
+matplotlib.pyplot.show()
 #ff Also for the other and long_term_incentive features
 #ff There are a few points with a high stddev, 
 #ff but again that can be an interesting information for the model
@@ -150,35 +153,106 @@ labels, features = targetFeatureSplit(data)
 
 
 
-### Task 4: Try a varity of classifiers
+### Task 4: Try a variety of classifiers
 ### Please name your classifier clf for easy export below.
 ### Note that if you want to do PCA or other multi-stage operations,
 ### you'll need to use Pipelines. For more info:
 ### http://scikit-learn.org/stable/modules/pipeline.html
 
-# Provided to give you a starting point. Try a variety of classifiers.
-from sklearn.naive_bayes import GaussianNB
-clfgnb = GaussianNB()
-clfgnb.fit(features, labels)
-print("Gaussian NB Score=", clfgnb.score(features, labels))
 
-# Out of the bos the precision is good but recall is very low, so I think the problem
-# is the balancing of the data, as the positives are only 18 out of 144
-# Playing with class weights improves the score, but I had to play also with random_state
-# to achieve scores higher than 0.3
+#ff Out of the box the Precision is good but Recall is very low, so I think the problem
+#ff is the balancing of the data, as the positives are only 18 out of 144
+#ff I tried to set class_weights = "balanced", but I got the opposite problem:
+#ff recall becomes high, but precision becomes low. I decided to play with weights.
+#ff Playing with class weights immediately improves the score, but I have to play 
+#ff also with random_state to achieve scores higher than 0.3
+#ff After achivieng good scores, I continue playing with other parameters.
+#ff I get benefits only from a slight increase of min_weight_fraction_leaf
 from sklearn import tree
+from sklearn.metrics import f1_score
 class_weights = {0.0: 1, 1.0: 3.5}
-#class_weights = "balanced"
-clf = tree.DecisionTreeClassifier(class_weight=class_weights, criterion='gini', max_depth=4,
+
+clfbestDT = tree.DecisionTreeClassifier(class_weight=class_weights, criterion='gini', 
+            max_depth=4, 
             max_features="auto", max_leaf_nodes=None, min_samples_leaf=1,
-            min_samples_split=4, min_weight_fraction_leaf=0.0,
+            min_samples_split=4, min_weight_fraction_leaf=0.01,
             presort=False, random_state=51, splitter='random')
-clf.fit(features, labels)
-print("Decision Tree Score=", clf.score(features, labels))
+clfbestDT.fit(features, labels)
+print("Decision Tree Score=", clfbestDT.score(features, labels))
+#import tester
+#tester.test_classifier(clfbestDT, my_dataset, my_features)
+# ============================BEST DT MODEL=================================
+#DecisionTreeClassifier(class_weight={0.0: 1, 1.0: 3.5}, criterion='gini',
+#            max_depth=4, max_features='auto', max_leaf_nodes=None,
+#            min_impurity_split=1e-07, min_samples_leaf=1,
+#            min_samples_split=4, min_weight_fraction_leaf=0.01,
+#            presort=False, random_state=51, splitter='random')
+#        Accuracy: 0.82480       Precision: 0.35932      Recall: 0.40100 
+#        F1: 0.37902     F2: 0.39191
+#        Total predictions: 15000        True positives:  802    False positives: 1430   
+#        False negatives: 1198   True negatives: 11570
+# =============================================================================
+# ==========================BEST RF MODEL (F1)=================================
+#RandomForestClassifier(bootstrap=True, class_weight={0.0: 1, 1.0: 12},
+#            criterion='gini', max_depth=5, max_features='auto',
+#            max_leaf_nodes=None, min_impurity_split=1e-07,
+#            min_samples_leaf=1, min_samples_split=3,
+#            min_weight_fraction_leaf=0.04, n_estimators=110, n_jobs=1,
+#            oob_score=False, random_state=51, verbose=0, warm_start=False)
+#        Accuracy: 0.84760       Precision: 0.42800      Recall: 0.42500 
+#                                F1: 0.42649     F2: 0.42560
+#        Total predictions: 15000        True positives:  850    False positives: 1136
+#        False negatives: 1150   True negatives: 11864
+# =============================================================================
 
 
-import tester
-tester.test_classifier(clf, my_dataset, my_features)
+#ff Trying with Random Forests
+#ff Playing with class weights immediately improves the score
+#ff I get benefits progressively increasing min_weight_fraction_leaf
+#ff and fine tuning class weights according to the balance between Precision 
+#ff and Recall: if Recall is much higher than Precision, I decrease the weight for 
+#ff the class=1.0, otherwise I increase it
+#ff After playing with most parameters, I get much better F1 score than 
+#ff with Decision Trees
+from sklearn.ensemble import RandomForestClassifier
+clfRF = RandomForestClassifier(class_weight={0.0: 1, 1.0: 12},
+                               max_depth=5,
+                               min_samples_split=3,
+                               n_estimators=110,
+                               min_weight_fraction_leaf=0.04,
+                               random_state=51)
+clfRF.fit(features, labels)
+y_preds = clfRF.predict(features)
+print("Random Forest Score=", 
+       clfRF.score(features, labels), f1_score(y_preds, labels) )
+#ff I tried to use f1_score() for a much faster prediction of the results I would get
+#ff with the tester, but it didn't work.
+#tester.test_classifier(clfRF, my_dataset, my_features)
+print("===============================================")
+
+#ff checking if the added features are important
+for ind, val in enumerate(clfRF.feature_importances_):
+    print my_features[ind+1], val
+#ff they are not the most important but they are quite important 
+
+#ff I try to fit the RF with the same hyperparameters to the data without the
+#ff two new features, but I get worse results
+data = featureFormat(my_dataset, features_list, sort_keys = True)
+labels, features = targetFeatureSplit(data)
+print("Nr. of features=", len(features))
+clfRFo = RandomForestClassifier(class_weight={0.0: 1, 1.0: 12},
+                               max_depth=5,
+                               min_samples_split=3,
+                               n_estimators=110,
+                               min_weight_fraction_leaf=0.04,
+                               random_state=51)
+clfRFo.fit(features, labels)
+y_preds = clfRFo.predict(features)
+print("Random Forest Score(original features)=", 
+       clfRFo.score(features, labels), f1_score(y_preds, labels) )
+#tester.test_classifier(clfRFo, my_dataset, features_list)
+print("===============================================")
+
 
 ### Task 5: Tune your classifier to achieve better than .3 precision and recall 
 ### using our testing script. Check the tester.py script in the final project
@@ -186,19 +260,42 @@ tester.test_classifier(clf, my_dataset, my_features)
 ### function. Because of the small size of the dataset, the script uses
 ### stratified shuffle split cross validation. For more info: 
 ### http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
+from sklearn.model_selection import GridSearchCV , StratifiedShuffleSplit
 
-# Example starting point. Try investigating other evaluation techniques!
-from sklearn.cross_validation import train_test_split
-features_train, features_test, labels_train, labels_test = \
-    train_test_split(features, labels, test_size=0.3, random_state=42)
+cv = StratifiedShuffleSplit(n_splits = 3, test_size=0.3,
+                            random_state = 51)
+params_grid = {"class_weight": [
+                                {0.0: 1, 1.0: 10}, 
+                                {0.0: 1, 1.0: 11}, 
+                                {0.0: 1, 1.0: 12},
+                                {0.0: 1, 1.0: 13}, 
+                                {0.0: 1, 1.0: 14}
+                                ],
+                "min_samples_split": [3, 4],
+                "n_estimators":[ 110],
+                "min_weight_fraction_leaf": [0.04],
+                "random_state": [60, 62, 63, 64, 65, 67, 68, 69]}
+#params_grid = {}
+#ff I tried GridSearchCV to check for parameters that could increase F1 score
+#ff but I wasn't able to get better values from the tester
+#ff so at the end I keep the RF model that I found with my manual fine tuning
+clfRFg = RandomForestClassifier(max_depth=5)
+grid = GridSearchCV(clfRFg, param_grid = params_grid,
+                          scoring = 'f1', 
+                          cv = cv, n_jobs=1, verbose=1)
+# grid = grid.fit(features, labels)
+# print("Best GRID RF Estimator=", grid.best_estimator_)
+# tester.test_classifier(grid.best_estimator_, my_dataset, my_features)
+
 
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
 ### check your results. You do not need to change anything below, but make sure
 ### that the version of poi_id.py that you submit can be run on its own and
 ### generates the necessary .pkl files for validating your results.
 
-dump_classifier_and_data(clf, my_dataset, features_list)
-print "This is the End"
+dump_classifier_and_data(clfRF, my_dataset, my_features)
+print startt, datetime.now()
+
 
 #The features in the data fall into three major types, namely financial features, email features and POI labels.
 #
